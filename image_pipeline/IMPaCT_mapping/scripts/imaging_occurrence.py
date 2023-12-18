@@ -1,10 +1,13 @@
 import os
 import csv
+import datetime
 import pandas as pd
 import json
+from pathlib import Path
 
-input_folder = '/input'
-config_file = '/config/IDs.json'
+input_dir = Path("/input")
+omop_tables_dir = input_dir.joinpath("derivatives", "omop_tables")
+config_file = Path("/config", "IDs.json")
 
 with open(config_file) as f:
     config = json.load(f)
@@ -12,81 +15,75 @@ with open(config_file) as f:
 imaging_occurrence_id_start = config["imaging_occurrence_id_start"]
 imaging_occurrence_id = -1
 
-patient_folders = [folder for folder in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, folder))]
+patient_dirs = [folder for folder in input_dir.iterdir() if folder.is_dir()] # subject
 
-print("Patient folders: ")
-print(patient_folders)
+print("Patient dirs: ")
+print(patient_dirs)
 
-for patient_folder in patient_folders:
-    patient_folder_path = os.path.join(input_folder, patient_folder)
-    print("Patient folder " + patient_folder_path)
-    person_id = int(patient_folder)
+for patient_dir in patient_dirs:
+    patient_dir_path = input_dir.joinpath(patient_dir)
+    print(f"Patient dir {patient_dir}")
 
-    procedure_folders = [folder for folder in os.listdir(patient_folder_path) if os.path.isdir(os.path.join(patient_folder_path, folder))]
-
+    procedure_dirs = [folder for folder in patient_dir_path.iterdir() if folder.is_dir()] # session
+    print(f"Procedure dirs {procedure_dirs}")
     print(imaging_occurrence_id)
 
     if imaging_occurrence_id != -1:
         imaging_occurrence_id_start = imaging_occurrence_id + 1
     
-    for index, procedure_folder in enumerate(procedure_folders, start=1):
+    for index, procedure_dir in enumerate(procedure_dirs, start=1):
         imaging_occurrence_id = imaging_occurrence_id_start + index - 1
-        procedure_folder_path = os.path.join(patient_folder_path, procedure_folder)
+        procedure_dir_path = patient_dir_path.joinpath(procedure_dir)
 
-        print ("datos:" + str(imaging_occurrence_id) + ":" + procedure_folder + ":" + procedure_folder_path)
-        procedure_occurrence_id = int(procedure_folder)
+        print ("datos:" + str(imaging_occurrence_id) + ":" + str(procedure_dir) + ":" + str(procedure_dir_path))
 
-        wadors_uri = os.path.join(procedure_folder_path, "original")
-
-        dicom_headers_file = os.path.join(procedure_folder_path, "dicom_headers", "dicom_tags.csv")
-        with open(dicom_headers_file, newline='') as dicom_file:
-            dicom_reader = csv.DictReader(dicom_file, delimiter=',')
-            dicom_headers = next(dicom_reader)
-
-            imaging_occurrence_date = dicom_headers.get('imaging_occurrence_date', '')
-            imaging_study_UID = dicom_headers.get('imaging_study_uid', '')
-            imaging_series_UID = imaging_study_UID #ad-hoc for rx images
-
+        wadors_uri = procedure_dir_path.joinpath("mod-rx") # mim-rx?
+        dicom_headers_files = wadors_uri.glob("*.json")
         rows = []
+        for dicom_headers_file in dicom_headers_files:
+            with open(dicom_headers_file, "r") as dicom_file:
+                dicom_reader = json.load(dicom_file)
+                imaging_occurrence_date = dicom_reader.get("00080021", {}).get("Value", datetime.date.today().strftime("%Y%m%d"))
+                if isinstance(imaging_occurrence_date, list):
+                    imaging_occurrence_date = imaging_occurrence_date[0]
+                imaging_study_UID = dicom_reader.get("00080018", {}).get("Value", 0)
+                if isinstance(imaging_study_UID, list):
+                    imaging_study_UID = imaging_study_UID[0]
+                imaging_series_UID = imaging_study_UID #ad-hoc for rx images
 
-        row = {
-            'imaging_occurrence_id': imaging_occurrence_id,
-            'person_id': person_id,
-            'procedure_occurrence_id': procedure_occurrence_id,
-            'wadors_uri': wadors_uri,
-            'imaging_occurrence_date': str(imaging_occurrence_date),
-            'imaging_study_UID': str(imaging_study_UID),
-            'imaging_series_UID': str(imaging_series_UID),
-            'modality': 'RX',
-            'anatomic_site_location': '2000000026'  #change this value according to the vocabulary
-        }
+            row = {
+                'imaging_occurrence_id': imaging_occurrence_id,
+                'person_id': patient_dir.name,
+                'procedure_occurrence_id': procedure_dir.name,
+                'wadors_uri': str(wadors_uri),
+                'imaging_occurrence_date': str(imaging_occurrence_date),
+                'imaging_study_UID': str(imaging_study_UID),
+                'imaging_series_UID': str(imaging_series_UID),
+                'modality': 'RX',
+                'anatomic_site_location': '2000000026'  #change this value according to the vocabulary
+            }
 
-        rows.append(row)
+            rows.append(row)
 
-        omop_tables_folder = os.path.join(procedure_folder_path, "omop_tables")
-        os.makedirs(omop_tables_folder, exist_ok=True)
-
-        csv_file = os.path.join(omop_tables_folder, "imaging_occurrence.csv")
         fieldnames = rows[0].keys()
 
-        with open(csv_file, mode='w', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-
-        print(f"The file '{csv_file}' has been successfully created.")
-
-        df = pd.DataFrame(rows)
-
-        excel_file = os.path.join(omop_tables_folder,'imaging_occurrence.xlsx')
-        df.to_excel(excel_file, index=False)
-
-        print(f"The file '{excel_file}' has been successfully created.")
+        omop_table_filename = omop_tables_dir.joinpath(
+            dicom_headers_file.relative_to(input_dir).parent.joinpath(
+                dicom_headers_file.stem + "_imaging_occurrence.csv"
+            )
+        )
+        omop_table_filename.parent.mkdir(parents=True, exist_ok=True)
 
         df = pd.DataFrame(rows)
 
-        omop_tables_folder = os.path.join(procedure_folder_path, "omop_tables")
-        os.makedirs(omop_tables_folder, exist_ok=True)
-        csv_file = os.path.join(omop_tables_folder, "imaging_occurrence.csv")
+        omop_table_filename_excel = omop_tables_dir.joinpath(
+            dicom_headers_file.relative_to(input_dir).parent.joinpath(
+                dicom_headers_file.stem + "_imaging_occurrence.xlsx"
+            )
+        )
+        df.to_excel(omop_table_filename_excel, index=False)
 
-        df.to_csv(csv_file, index=False)
+        print(f"The file '{omop_table_filename_excel}' has been successfully created.")
+
+        df.to_csv(omop_table_filename, index=False)
+        print(f"The file '{omop_table_filename}' has been successfully created.")

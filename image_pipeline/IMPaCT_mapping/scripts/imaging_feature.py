@@ -2,9 +2,11 @@ import os
 import csv
 import pandas as pd
 import json
+from pathlib import Path
 
-input_folder = '/input'
-config_file = '/config/IDs.json'
+input_dir = Path("/input")
+omop_tables_dir = input_dir.joinpath("derivatives", "omop_tables")
+config_file = Path("/config", "IDs.json")
 
 with open(config_file) as f:
     config = json.load(f)
@@ -16,16 +18,15 @@ imaging_feature_domain_id_start = config["measurement_id_start"]
 imaging_feature_id = -1
 imaging_feature_domain_id = -1
 
-patient_folders = [folder for folder in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, folder))]
+patient_dirs = [folder for folder in omop_tables_dir.iterdir() if folder.is_dir()] # subject
 
-for patient_folder in patient_folders:
-    patient_folder_path = os.path.join(input_folder, patient_folder)
-    person_id = int(patient_folder)
+for patient_dir in patient_dirs:
+    patient_dir_path = omop_tables_dir.joinpath(patient_dir)
 
-    procedure_folders = [folder for folder in os.listdir(patient_folder_path) if os.path.isdir(os.path.join(patient_folder_path, folder))]
+    procedure_dirs = [folder for folder in patient_dir_path.iterdir() if folder.is_dir()] # session
 
-    for index, procedure_folder in enumerate(procedure_folders, start=1):
-        procedure_folder_path = os.path.join(patient_folder_path, procedure_folder)
+    for index, procedure_dir in enumerate(procedure_dirs, start=1):
+        procedure_dir_path = patient_dir_path.joinpath(procedure_dir, "mod-rx")
         
         if imaging_feature_id != -1:
             imaging_feature_id_start = imaging_feature_id + 1
@@ -33,9 +34,9 @@ for patient_folder in patient_folders:
             imaging_feature_domain_id_start = imaging_feature_domain_id + 1
 
         rows = []
-
-        img_occ_file = os.path.join(procedure_folder_path, "omop_tables", "imaging_occurrence.csv")
-        with open(img_occ_file, newline='') as img_occ_file:
+        print(procedure_dir_path)
+        img_occ_filename = list(procedure_dir_path.glob("*imaging_occurrence.csv"))[0]
+        with open(img_occ_filename, newline='') as img_occ_file:
             ids_reader = csv.DictReader(img_occ_file, delimiter=',')
  
             for row in ids_reader:
@@ -59,10 +60,7 @@ for patient_folder in patient_folders:
 
             rows.append(row)
 
-        omop_tables_folder = os.path.join(procedure_folder_path, "omop_tables")
-        os.makedirs(omop_tables_folder, exist_ok=True)
-
-        csv_file = os.path.join(omop_tables_folder, "imaging_feature.csv")
+        csv_file = img_occ_filename.parent.joinpath(img_occ_filename.stem.replace("imaging_occurrence", "imaging_feature.csv"))
         fieldnames = rows[0].keys()
 
         with open(csv_file, mode='w', newline='') as file:
@@ -74,7 +72,7 @@ for patient_folder in patient_folders:
 
         df = pd.DataFrame(rows)
 
-        excel_file = os.path.join(omop_tables_folder, 'imaging_feature.xlsx')
+        excel_file = img_occ_filename.parent.joinpath(img_occ_filename.stem.replace("imaging_occurrence", "imaging_feature.xlsx"))
         df.to_excel(excel_file, index=False)
 
         print(f"The file '{excel_file}' has been successfully created.")

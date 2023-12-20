@@ -1,5 +1,6 @@
 FROM python:3.9-slim-buster
 
+COPY config /config
 COPY scripts /scripts
 
 WORKDIR /scripts

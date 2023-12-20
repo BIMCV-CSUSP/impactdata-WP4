@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 input_dir = Path("/input")
+dicom_headers_dir = input_dir.joinpath("derivatives", "dicom_headers")
 omop_tables_dir = input_dir.joinpath("derivatives", "omop_tables")
 config_file = Path("/config", "IDs.json")
 
@@ -50,6 +51,36 @@ for patient_dir in patient_dirs:
                 if isinstance(imaging_study_UID, list):
                     imaging_study_UID = imaging_study_UID[0]
                 imaging_series_UID = imaging_study_UID #ad-hoc for rx images
+
+                dicom_tags = {}
+                dicom_tags["imaging_occurrence_date"] = imaging_occurrence_date
+                dicom_tags["imaging_study_uid"] = imaging_study_UID
+                view_position = dicom_reader.get("00185101", {}).get("Value", 0)
+                if isinstance(view_position, list):
+                    view_position = view_position[0]
+                dicom_tags["view_position"] = view_position
+                spatial_resolution = dicom_reader.get("00181050", {}).get("Value", 0)
+                if isinstance(spatial_resolution, list):
+                    spatial_resolution = spatial_resolution[0]
+                dicom_tags["spatial_resolution"] = spatial_resolution
+                columns = dicom_reader.get("00280011", {}).get("Value", 0)
+                if isinstance(columns, list):
+                    columns = columns[0]
+                dicom_tags["columns"] = columns
+                dcm_rows = dicom_reader.get("00280010", {}).get("Value", 0)
+                if isinstance(dcm_rows, list):
+                    dcm_rows = dcm_rows[0]
+                dicom_tags["rows"] = dcm_rows
+
+            df = pd.DataFrame.from_dict(dicom_tags, orient="index")
+            df = df.transpose()
+            dicom_headers_path = dicom_headers_dir.joinpath(
+            dicom_headers_file.relative_to(input_dir).parent.joinpath(
+                    dicom_headers_file.stem + "_dicom_tags.csv"
+                )
+            )
+            dicom_headers_path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(dicom_headers_path, index=False)
 
             row = {
                 'imaging_occurrence_id': imaging_occurrence_id,

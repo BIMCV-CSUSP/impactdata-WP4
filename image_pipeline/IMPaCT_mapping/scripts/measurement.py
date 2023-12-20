@@ -7,21 +7,23 @@ import json
 from datetime import datetime, timedelta
 from map_radiomics import map_radiomics
 from map_dicom_headers import map_dicom_headers
+from pathlib import Path
 
-input_folder = '/input'
+input_dir = Path("/input")
+dicom_headers_dir = input_dir.joinpath("derivatives", "dicom_headers")
+radiomics_dir = input_dir.joinpath("derivatives", "radiomics")
+omop_tables_dir = input_dir.joinpath("derivatives", "omop_tables")
 
-patient_folders = [folder for folder in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, folder))]
+patient_dirs = [folder for folder in omop_tables_dir.iterdir() if folder.is_dir()] # subject
 
 rows = []
 
-for patient_folder in patient_folders:
-    patient_folder_path = os.path.join(input_folder, patient_folder)
-    person_id = int(patient_folder)
+for patient_dir in patient_dirs:
+    patient_dir_path = omop_tables_dir.joinpath(patient_dir)
+    procedure_dirs = [folder for folder in patient_dir_path.iterdir() if folder.is_dir()] # session
 
-    procedure_folders = [folder for folder in os.listdir(patient_folder_path) if os.path.isdir(os.path.join(patient_folder_path, folder))]
-
-    for index, procedure_folder in enumerate(procedure_folders, start=1):
-        procedure_folder_path = os.path.join(patient_folder_path, procedure_folder)
+    for index, procedure_dir in enumerate(procedure_dirs, start=1):
+        procedure_dir_path = patient_dir_path.joinpath(procedure_dir, "mod-rx")
         
         now = datetime.now() + timedelta(hours=2)
         local_tz = pytz.timezone('Europe/Madrid')
@@ -32,19 +34,36 @@ for patient_folder in patient_folders:
         measurement_time_str = measurement_datetime.strftime("%H:%M:%S")
 
         measurement_ids=[]
-        img_feature_file = os.path.join(procedure_folder_path, "omop_tables", "imaging_feature.csv")
+        print(procedure_dir_path)
+        img_feature_file = list(procedure_dir_path.glob("*imaging_feature.csv"))[0]
         with open(img_feature_file, newline='') as img_feature:
             measurement = csv.DictReader(img_feature, delimiter=',')
             for id in measurement:
                 measurement_id = id.get('imaging_feature_domain_id')
                 measurement_ids.append(int(measurement_id)) 
 
-        rad_input_file = os.path.join(procedure_folder_path, "radiomics", "radiomics.csv")
-        rad_output_file = os.path.join(procedure_folder_path, "radiomics", "radiomics_mapped.csv")
+        rad_input_file = radiomics_dir.joinpath(
+            img_feature_file.relative_to(omop_tables_dir).parent.joinpath(
+                img_feature_file.stem.replace("imaging_feature", "radiomics.csv")
+            )
+        )
+        rad_output_file = radiomics_dir.joinpath(
+            img_feature_file.relative_to(omop_tables_dir).parent.joinpath(
+                img_feature_file.stem.replace("imaging_feature", "radiomics_mapped.csv")
+            )
+        )
         map_radiomics(rad_input_file, rad_output_file)
         
-        dcm_headers_input_file = os.path.join(procedure_folder_path, "dicom_headers", "dicom_tags.csv")
-        dcm_headers_output_file = os.path.join(procedure_folder_path, "dicom_headers", "dicom_tags_mapped.csv")
+        dcm_headers_input_file = dicom_headers_dir.joinpath(
+            img_feature_file.relative_to(omop_tables_dir).parent.joinpath(
+                img_feature_file.stem.replace("imaging_feature", "dicom_tags.csv")
+            )
+        )
+        dcm_headers_output_file = dicom_headers_dir.joinpath(
+            img_feature_file.relative_to(omop_tables_dir).parent.joinpath(
+                img_feature_file.stem.replace("imaging_feature", "dicom_tags_mapped.csv")
+            )
+        )
         map_dicom_headers(dcm_headers_input_file, dcm_headers_output_file)
 
         df_rad = pd.read_csv(rad_output_file)
@@ -63,7 +82,7 @@ for patient_folder in patient_folders:
 
             row_data = {
                 'measurement_id': int(measurement_id),
-                'person_id': int(person_id),
+                'person_id': patient_dir.name,
                 'measurement_concept_id': int(measurement_concept_id),
                 'measurement_date': measurement_date,
                 'measurement_datetime': measurement_datetime_str,
@@ -88,10 +107,8 @@ for patient_folder in patient_folders:
             }
             rows.append(row_data)
 
-        omop_tables_folder = os.path.join(procedure_folder_path, "omop_tables")
-        os.makedirs(omop_tables_folder, exist_ok=True)
 
-        csv_file = os.path.join(omop_tables_folder, "measurement.csv")
+        csv_file = img_feature_file.parent.joinpath(img_feature_file.stem.replace("imaging_feature", "measurement.csv"))
         fieldnames = rows[0].keys()
         with open(csv_file, mode='w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -102,7 +119,7 @@ for patient_folder in patient_folders:
 
         df = pd.DataFrame(rows)
 
-        excel_file = os.path.join(omop_tables_folder, 'measurement.xlsx')
+        excel_file = img_feature_file.parent.joinpath(img_feature_file.stem.replace("imaging_feature", "measurement.xlsx"))
         df.to_excel(excel_file, index=False)
 
         print(f"The file '{excel_file}' has been successfully created.")

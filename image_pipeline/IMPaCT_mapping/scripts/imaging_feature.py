@@ -18,7 +18,7 @@ imaging_feature_domain_id_start = config["measurement_id_start"]
 imaging_feature_id = -1
 imaging_feature_domain_id = -1
 
-patient_dirs = [folder for folder in omop_tables_dir.iterdir() if folder.is_dir()] # subject
+patient_dirs = [folder for folder in omop_tables_dir.iterdir() if (folder.is_dir() and "sub" in str(folder))] # subject
 
 for patient_dir in patient_dirs:
     patient_dir_path = omop_tables_dir.joinpath(patient_dir)
@@ -26,7 +26,7 @@ for patient_dir in patient_dirs:
     procedure_dirs = [folder for folder in patient_dir_path.iterdir() if folder.is_dir()] # session
 
     for index, procedure_dir in enumerate(procedure_dirs, start=1):
-        procedure_dir_path = patient_dir_path.joinpath(procedure_dir, "mod-rx")
+        procedure_dir_path = patient_dir_path.joinpath(procedure_dir, "mim-ligth")
         
         if imaging_feature_id != -1:
             imaging_feature_id_start = imaging_feature_id + 1
@@ -35,7 +35,7 @@ for patient_dir in patient_dirs:
 
         rows = []
         print(procedure_dir_path)
-        img_occ_filename = list(procedure_dir_path.glob("*imaging_occurrence.csv"))[0]
+        img_occ_filename = list(procedure_dir_path.glob("*/*imaging_occurrence.csv"))[0]
         with open(img_occ_filename, newline='') as img_occ_file:
             ids_reader = csv.DictReader(img_occ_file, delimiter=',')
  

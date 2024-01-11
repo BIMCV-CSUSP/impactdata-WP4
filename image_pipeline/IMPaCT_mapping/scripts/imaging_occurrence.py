@@ -16,7 +16,7 @@ with open(config_file) as f:
 imaging_occurrence_id_start = config["imaging_occurrence_id_start"]
 imaging_occurrence_id = -1
 
-patient_dirs = [folder for folder in input_dir.iterdir() if folder.is_dir()] # subject
+patient_dirs = [folder for folder in input_dir.iterdir() if (folder.is_dir() and "sub" in str(folder))] # subject
 
 print("Patient dirs: ")
 print(patient_dirs)
@@ -38,8 +38,8 @@ for patient_dir in patient_dirs:
 
         print ("datos:" + str(imaging_occurrence_id) + ":" + str(procedure_dir) + ":" + str(procedure_dir_path))
 
-        wadors_uri = procedure_dir_path.joinpath("mod-rx") # mim-rx?
-        dicom_headers_files = wadors_uri.glob("*.json")
+        wadors_uri = procedure_dir_path.joinpath("mim-ligth")
+        dicom_headers_files = wadors_uri.glob("*/*.json")
         rows = []
         for dicom_headers_file in dicom_headers_files:
             with open(dicom_headers_file, "r") as dicom_file:

@@ -240,7 +240,7 @@ def iterate_mask(input_dir, masks_dir):
     model_path = Path(__file__).parent / "best_models" / "mrcnn_lungs_exp20_0250.h5"
     model = get_model(str(model_path))
 
-    images = input_dir.glob("*/*/*/*.png")
+    images = input_dir.glob("*/*/*/*/*.png")
     for filename in images:
         print(f"Procesando la imagen {filename}")
         try:

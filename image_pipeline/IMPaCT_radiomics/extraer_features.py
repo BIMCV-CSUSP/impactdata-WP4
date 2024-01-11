@@ -13,7 +13,7 @@ if __name__ == "__main__":
     input_dir = Path("/input")
     masks_dir = input_dir.joinpath("derivatives", "lung_segmentation")
     radiomics_dir = input_dir.joinpath("derivatives", "radiomics")
-    images = input_dir.glob("*/*/*/*.png")
+    images = input_dir.glob("*/*/*/*/*.png")
 
     for filename in images:
         print(f"Procesando la imagen {filename}")

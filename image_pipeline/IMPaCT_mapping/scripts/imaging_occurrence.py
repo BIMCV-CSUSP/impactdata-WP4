@@ -41,7 +41,11 @@ for patient_dir in patient_dirs:
         wadors_uri = procedure_dir_path.joinpath("mim-ligth")
         dicom_headers_files = wadors_uri.glob("*/*.json")
         rows = []
+
+        index_image=1
         for dicom_headers_file in dicom_headers_files:
+            imaging_occurrence_id_mids=(imaging_occurrence_id)*100+index_image
+            index_image=index_image+1
             with open(dicom_headers_file, "r") as dicom_file:
                 dicom_reader = json.load(dicom_file)
                 imaging_occurrence_date = dicom_reader.get("00080021", {}).get("Value", datetime.date.today().strftime("%Y%m%d"))
@@ -83,7 +87,7 @@ for patient_dir in patient_dirs:
             df.to_csv(dicom_headers_path, index=False)
 
             row = {
-                'imaging_occurrence_id': imaging_occurrence_id,
+                'imaging_occurrence_id': imaging_occurrence_id_mids,
                 'person_id': patient_dir.name,
                 'procedure_occurrence_id': procedure_dir.name,
                 'wadors_uri': str(wadors_uri),
